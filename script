@@ -1,0 +1,475 @@
+sudo dnf update -y
+sudo dnf remove podman -y
+sudo subscription-manager repos --enable=rhel-9-for-x86_64-appstream-rpms
+sudo subscription-manager repos --enable=rhel-9-for-x86_64-baseos-rpms
+sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+sudo dnf install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
+sudo systemctl start docker
+sudo systemctl enable docker
+docker --version
+docker info
+sudo usermod -aG docker $USER
+newgrp docker
+docker run hello-world
+-----out put look like
+Hello from Docker!
+This message shows that your installation appears to be working correctly.
+
+
+docker network create mynet
+docker network inspect mynet
+
+vi shard1.sh
+
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-v /mongodb/data/db11:/data/db -p 27011:27017 --expose=27017 -d --name=mongodb11 mongo --shardsvr --replSet shard01 --dbpath /data/db --port 27017
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-v /mongodb/data/db12:/data/db  -p 27012:27017  --expose=27017 -d --name=mongodb12 mongo --shardsvr --replSet shard01 --dbpath /data/db --port 27017
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-v /mongodb/data/db13:/data/db  -p 27013:27017  --expose=27017 -d --name=mongodb13 mongo --shardsvr --replSet shard01 --dbpath /data/db --port 27017
+
+
+Script to create shard02
+
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-v /mongodb/data/db21:/data/db -p 27021:27017 --expose=27017 -d --name=mongodb21 mongo --shardsvr --replSet shard02 --dbpath /data/db --port 27017
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-v /mongodb/data/db22:/data/db -p 27022:27017 --expose=27017 -d --name=mongodb22 mongo --shardsvr --replSet shard02 --dbpath /data/db --port 27017
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-v /mongodb/data/db23:/data/db  -p 27023:27017  --expose=27017 -d --name=mongodb23 mongo --shardsvr --replSet shard02 --dbpath /data/db --port 27017
+
+
+Script to create shard03
+
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-v /mongodb/data/db31:/data/db -p 27031:27017 --expose=27017 -d --name=mongodb31 mongo --shardsvr --replSet shard03 --dbpath /data/db --port 27017
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-v /mongodb/data/db32:/data/db -p 27032:27017 --expose=27017 -d --name=mongodb32 mongo --shardsvr --replSet shard03 --dbpath /data/db --port 27017
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-v /mongodb/data/db33:/data/db  -p 27033:27017  --expose=27017 -d --name=mongodb33 mongo --shardsvr --replSet shard03 --dbpath /data/db --port 27017
+
+vi config_servers.sh
+
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-v /mongodb/configserver/data/db41:/data/db -d --expose=27017 --name=configserver41 mongo --configsvr --replSet configserver --dbpath /data/db --port 27017
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-v /mongodb/configserver/data/db42:/data/db -d --expose=27017 --name=configserver42 mongo --configsvr --replSet configserver --dbpath /data/db --port 27017
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-v /mongodb/configserver/data/db43:/data/db -d --expose=27017 --name=configserver43 mongo --configsvr --replSet configserver --dbpath /data/db --port 27017
+
+
+vi routers.sh
+
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-p 27051:27017 --expose=27017 -d --name=mongos51 mongo mongos --port 27017 --configdb configserver/configserver41:27017,configserver42:27017,configserver43:27017 --bind_ip_all
+docker run --log-opt mode=non-blocking \
+--network mynet \
+--log-driver json-file \
+--log-opt max-size=10m \
+--log-opt max-file=10 \
+-p 27052:27017 --expose=27017 -d --name=mongos52 mongo mongos --port 27017 --configdb configserver/configserver41:27017,configserver42:27017,configserver43:27017 --bind_ip_all
+
+
+Run this ONLY on configserver41:
+
+docker exec -it configserver41 bash -c "echo 'rs.initiate({
+  _id: \"configserver\",
+  configsvr: true,
+  members: [
+    { _id: 0, host: \"configserver41:27017\" },
+    { _id: 1, host: \"configserver42:27017\" },
+    { _id: 2, host: \"configserver43:27017\" }
+  ]
+})' | mongosh"
+
+Wait a few seconds for the replica set to elect a primary.
+
+Check the replica set status from any node:
+
+
+
+docker exec -it configserver41 bash -c "echo 'rs.status()' | mongo"
+docker exec -it configserver42 bash -c "echo 'rs.status()' | mongo"
+docker exec -it configserver43 bash -c "echo 'rs.status()' | mongo"
+Now you can connect from the mongos router or mongodb11 and see the replica set config.
+
+
+
+✔ Initialize shard01 (mongodb11):
+Run once on any one container (e.g., mongodb11):
+
+
+docker exec -it mongodb11 mongosh --eval '
+rs.initiate({
+  _id: "shard01",
+  members: [
+    { _id: 0, host: "mongodb11:27017" },
+    { _id: 1, host: "mongodb12:27017" },
+    { _id: 2, host: "mongodb13:27017" }
+  ]
+})'
+✔ Initialize shard02:
+
+docker exec -it mongodb21 mongosh --eval '
+rs.initiate({
+  _id: "shard02",
+  members: [
+    { _id: 0, host: "mongodb21:27017" },
+    { _id: 1, host: "mongodb22:27017" },
+    { _id: 2, host: "mongodb23:27017" }
+  ]
+})'
+✔ Initialize shard03:
+
+docker exec -it mongodb31 mongosh --eval '
+rs.initiate({
+  _id: "shard03",
+  members: [
+    { _id: 0, host: "mongodb31:27017" },
+    { _id: 1, host: "mongodb32:27017" },
+    { _id: 2, host: "mongodb33:27017" }
+  ]
+})'
+✅ Then Add Shards to Mongos:
+Once all replica sets are initiated, use any one mongos container to add them to the sharded cluster.
+
+
+docker exec -it mongos51 mongosh --eval '
+sh.addShard("shard01/mongodb11:27017,mongodb12:27017,mongodb13:27017");
+sh.addShard("shard02/mongodb21:27017,mongodb22:27017,mongodb23:27017");
+sh.addShard("shard03/mongodb31:27017,mongodb32:27017,mongodb33:27017");'
+
+
+
+✅ Finally, verify sharding setup:
+
+
+docker exec -it mongos51 mongosh --eval 'sh.status()'
+
+
+
+
+script
+
+
+
+#!/bin/bash
+
+# Step 1: Create Docker network
+docker network create mynet
+
+# Step 2: Start Shard01 replica set
+for i in 11 12 13; do
+  docker run --log-opt mode=non-blocking \
+    --network mynet \
+    --log-driver json-file \
+    --log-opt max-size=10m \
+    --log-opt max-file=10 \
+    -v /mongodb/data/db$i:/data/db \
+    -p 270$i:27017 --expose=27017 \
+    -d --name=mongodb$i mongo \
+    --shardsvr --replSet shard01 --dbpath /data/db --port 27017
+  sleep 1
+done
+
+# Step 3: Start Shard02 replica set
+for i in 21 22 23; do
+  docker run --log-opt mode=non-blocking \
+    --network mynet \
+    --log-driver json-file \
+    --log-opt max-size=10m \
+    --log-opt max-file=10 \
+    -v /mongodb/data/db$i:/data/db \
+    -p 270$i:27017 --expose=27017 \
+    -d --name=mongodb$i mongo \
+    --shardsvr --replSet shard02 --dbpath /data/db --port 27017
+  sleep 1
+done
+
+# Step 4: Start Shard03 replica set
+for i in 31 32 33; do
+  docker run --log-opt mode=non-blocking \
+    --network mynet \
+    --log-driver json-file \
+    --log-opt max-size=10m \
+    --log-opt max-file=10 \
+    -v /mongodb/data/db$i:/data/db \
+    -p 270$i:27017 --expose=27017 \
+    -d --name=mongodb$i mongo \
+    --shardsvr --replSet shard03 --dbpath /data/db --port 27017
+  sleep 1
+done
+
+# Step 5: Start Config Server replica set
+for i in 41 42 43; do
+  docker run --log-opt mode=non-blocking \
+    --network mynet \
+    --log-driver json-file \
+    --log-opt max-size=10m \
+    --log-opt max-file=10 \
+    -v /mongodb/configserver/data/db$i:/data/db \
+    --expose=27017 -d --name=configserver$i mongo \
+    --configsvr --replSet configserver --dbpath /data/db --port 27017
+  sleep 1
+done
+
+# Step 6: Initiate Config Server Replica Set
+docker exec -it configserver41 mongosh --eval '
+rs.initiate({
+  _id: "configserver",
+  configsvr: true,
+  members: [
+    { _id: 0, host: "configserver41:27017" },
+    { _id: 1, host: "configserver42:27017" },
+    { _id: 2, host: "configserver43:27017" }
+  ]
+})'
+sleep 10
+
+# Step 7: Start Mongos Routers
+for i in 51 52; do
+  docker run --log-opt mode=non-blocking \
+    --network mynet \
+    --log-driver json-file \
+    --log-opt max-size=10m \
+    --log-opt max-file=10 \
+    -p 270$i:27017 --expose=27017 \
+    -d --name=mongos$i mongo mongos \
+    --port 27017 \
+    --configdb configserver/configserver41:27017,configserver42:27017,configserver43:27017 \
+    --bind_ip_all
+  sleep 1
+done
+
+# Step 8: Initiate Shard Replica Sets
+docker exec -it mongodb11 mongosh --eval '
+rs.initiate({
+  _id: "shard01",
+  members: [
+    { _id: 0, host: "mongodb11:27017" },
+    { _id: 1, host: "mongodb12:27017" },
+    { _id: 2, host: "mongodb13:27017" }
+  ]
+})'
+sleep 10
+
+docker exec -it mongodb21 mongosh --eval '
+rs.initiate({
+  _id: "shard02",
+  members: [
+    { _id: 0, host: "mongodb21:27017" },
+    { _id: 1, host: "mongodb22:27017" },
+    { _id: 2, host: "mongodb23:27017" }
+  ]
+})'
+sleep 10
+
+docker exec -it mongodb31 mongosh --eval '
+rs.initiate({
+  _id: "shard03",
+  members: [
+    { _id: 0, host: "mongodb31:27017" },
+    { _id: 1, host: "mongodb32:27017" },
+    { _id: 2, host: "mongodb33:27017" }
+  ]
+})'
+sleep 10
+
+# Step 9: Add Shards to Mongos
+docker exec -it mongos51 mongosh --eval '
+sh.addShard("shard01/mongodb11:27017,mongodb12:27017,mongodb13:27017")
+sh.addShard("shard02/mongodb21:27017,mongodb22:27017,mongodb23:27017")
+sh.addShard("shard03/mongodb31:27017,mongodb32:27017,mongodb33:27017")
+'
+
+# Step 10: Check sharding status
+docker exec -it mongos51 mongosh --eval 'sh.status()'
+
+echo "✅ MongoDB sharded cluster setup is complete."
+
+
+
+
+integrate with python application
+
+sudo yum install python3-pip -y
+pip install pymongo
+
+
+
+python order_generator.py
+
+#!/usr/bin/env python3
+from pymongo import MongoClient
+from datetime import datetime
+import random
+import uuid
+
+# Connect to the mongos router
+client = MongoClient("mongodb://localhost:27051")
+
+# Access the database and collection
+db = client["sales_db"]
+orders = db["orders"]
+
+# Sample lists to generate random product names and user names
+product_names = ["Laptop", "Phone", "Monitor", "Tablet", "Keyboard", "Mouse", "Charger", "SSD", "Camera", "Speaker"]
+user_names = ["Alice", "Bob", "Charlie", "David", "Eve", "Frank", "Grace", "Heidi", "Ivan", "Judy"]
+
+# Generate 10 to 20 random orders
+num_orders = random.randint(10, 20)
+order_docs = []
+
+for _ in range(num_orders):
+    product = random.choice(product_names)
+    user = random.choice(user_names)
+    quantity = random.randint(1, 10)
+    price = random.randint(500, 100000)  # Random price between 500 and 100000
+    total = quantity * price
+
+    order = {
+        "order_id": str(uuid.uuid4()),
+        "user": user,
+        "product": product,
+        "quantity": quantity,
+        "price": price,
+        "total": total,
+        "order_time": datetime.utcnow()
+    }
+
+    order_docs.append(order)
+
+# Insert documents into MongoDB
+result = orders.insert_many(order_docs)
+print(f"{len(result.inserted_ids)} random orders inserted.")
+
+
+chmod +x order_generator.py
+
+
+✅ Sample Python Script: read_orders.py
+python
+
+from pymongo import MongoClient
+import random
+from datetime import datetime, timedelta
+
+# Connect to the mongos router
+client = MongoClient("mongodb://localhost:27051")
+
+# Access the database and collection
+db = client["sales_db"]
+orders = db["orders"]
+
+# Perform 10 to 20 random read queries
+num_reads = random.randint(10, 20)
+
+# Simulate queries
+for i in range(num_reads):
+    query_type = random.choice(["user", "product", "time_range", "order_id"])
+
+    if query_type == "user":
+        # Query by user name
+        user = random.choice(["Alice", "Bob", "Charlie", "David", "Eve", "Frank", "Grace", "Heidi", "Ivan", "Judy"])
+        result = orders.find({"user": user}).limit(5)
+        print(f"[{i+1}] Queried by user: {user}")
+
+    elif query_type == "product":
+        # Query by product
+        product = random.choice(["Laptop", "Phone", "Monitor", "Tablet", "Keyboard", "Mouse", "Charger", "SSD", "Camera", "Speaker"])
+        result = orders.find({"product": product}).limit(5)
+        print(f"[{i+1}] Queried by product: {product}")
+
+    elif query_type == "time_range":
+        # Query documents from the past 5 minutes
+        now = datetime.utcnow()
+        past = now - timedelta(minutes=5)
+        result = orders.find({"order_time": {"$gte": past, "$lte": now}}).limit(5)
+        print(f"[{i+1}] Queried by time range: last 5 minutes")
+
+    elif query_type == "order_id":
+        # Fetch one random order_id from DB if exists
+        sample = orders.aggregate([{"$sample": {"size": 1}}])
+        doc = next(sample, None)
+        if doc:
+            order_id = doc["order_id"]
+            result = orders.find({"order_id": order_id})
+            print(f"[{i+1}] Queried by order_id: {order_id}")
+        else:
+            print(f"[{i+1}] No orders in database to query by order_id.")
+            continue
+
+    # Optionally print results
+    for doc in result:
+        print(f"  - Order: {doc['order_id']}, User: {doc['user']}, Product: {doc['product']}, Total: {doc['total']}")
+✅ How to Run This:
+bash
+Copy
+Edit
+python3 read_orders.py
+✅ Optional: Automate with Cron
+Add a cron job to run this script every minute:
+
+
+crontab -e
+
+*/1 * * * * /usr/bin/python3 /home/ec2-user/read_orders.py >> /home/ec2-user/read_orders.log 2>&1
+*/1 * * * * /usr/bin/python3 /home/ec2-user/order_generator.py >> /home/ec2-user/order_generator.log 2>&1
+
+tail -f order_generator.log
+ps -ef | grep cron
+
+
+https://github.com/GaneshJC0/Django-Sales-and-service.git
